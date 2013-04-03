@@ -20,16 +20,4 @@ public class RssPluginGoogle extends RssPlugin {
 		return link.split("url=")[1];
 	}
 
-	@Override
-	public List<Item> getItems() {
-		List<Item> list = new ArrayList<Item>();
-		for (RssItemBean item : feed.getItems()) {
-			Item i = new Item();
-			i.Title = item.getTitle();
-			i.Date = item.getPubDate();
-			i.Link = item.getLink();
-			list.add(i);
-		}
-		return list;
-	}	
 }

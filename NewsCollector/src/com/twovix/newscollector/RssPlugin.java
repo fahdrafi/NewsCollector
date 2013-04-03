@@ -1,5 +1,6 @@
 package com.twovix.newscollector;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.horrabin.horrorss.*;
@@ -18,7 +19,19 @@ public abstract class RssPlugin {
 		feed = parser.load(path);
 	}
 	
-	protected abstract String getLink(String link);
+	protected String getLink(String link) {
+		return link;
+	}
 	
-	public abstract List<Item> getItems();
+	public List<Item> getItems() {
+		List<Item> list = new ArrayList<Item>();
+		for (RssItemBean item : feed.getItems()) {
+			Item i = new Item();
+			i.Title = item.getTitle();
+			i.Date = item.getPubDate();
+			i.Link = getLink(item.getLink());
+			list.add(i);
+		}
+		return list;
+	}
 }
