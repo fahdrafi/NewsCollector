@@ -16,17 +16,17 @@ object htmlcleaner {
 }
 
 object RssParser {     
-	def parse(rssText:String, plugin:RssPlugin) : List[RSSItem] =  {
+	def parse(rssText:String, plugin:RssPlugin) : List[RssItem] =  {
 		if( !(rssText.contains("<rss") && rssText.contains("</rss>"))) return Nil
 		
 	    val dateFormatterRssPubDate = new java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", java.util.Locale.ENGLISH);
 	    val altDateFormatter =   new java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.ENGLISH);
- 		var itemList: List[RSSItem] = Nil
+ 		var itemList: List[RssItem] = Nil
 		val rssxml = XML.loadString(rssText)
 		val itemsxml = rssxml \\ "item"
 
 		for(i <- itemsxml) {
-		  val  titem = new RSSItem
+		  val  titem = new RssItem
 		  try{
 		    titem.Date = dateFormatterRssPubDate.parse((i \ "pubDate").text)
 		  } catch {
@@ -53,17 +53,15 @@ object RssParser {
 	    }
 	}
 	
-	def parse(plugin:RssPlugin) : List[RSSItem] = {
-//	println("Parsing " + plugin.getPath())
-	try{	    
-	  val wstring = read(plugin.getPath())
-//	  println("Read from path " + plugin.getPath())
-	  val xlist = parse(wstring, plugin)
-	  return xlist
-	} catch {
-	  case e:Throwable=>
+	def parse(plugin:RssPlugin) : List[RssItem] = {
+		try{	    
+			val wstring = read(plugin.getPath())
+			val xlist = parse(wstring, plugin)
+			return xlist
+		} catch {
+			case e:Throwable=>
 	      //Remove broken feeds from database?
-	}
-	Nil    
+		}
+		Nil    
 	}
 }

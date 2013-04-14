@@ -1,6 +1,6 @@
 package com.twovix.newscollector
 
-import au.com.bytecode.opencsv.CSVReader;
+import au.com.bytecode.opencsv.CSVReader
 import scala.collection.parallel._
 import scala.concurrent._
 import ExecutionContext.Implicits.global
@@ -37,7 +37,7 @@ object NewsCollector {
 
   
 
-   def fetchRSSLinks(plugin:RssPlugin) : List[RSSItem] = {
+   def fetchRSSLinks(plugin:RssPlugin) : List[RssItem] = {
 	RssParser.parse(plugin)
     //	 (plugin.getItems()).toList
    }
@@ -48,7 +48,7 @@ object NewsCollector {
    }
    
 
-  def insertStory(i:RSSItem) : Boolean = {
+  def insertStory(i:RssItem) : Boolean = {
 	if (linkCache.size > 100000) 
 	  {
 		linkCache.clear
@@ -74,7 +74,7 @@ object NewsCollector {
 	}
   }
   
-  def insertLinks(list:List[RSSItem]):Int = {
+  def insertLinks(list:List[RssItem]):Int = {
    list.map(x=>insertStory(x)).count(_ == true)
   }
   
