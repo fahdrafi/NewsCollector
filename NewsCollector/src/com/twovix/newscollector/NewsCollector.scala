@@ -11,15 +11,32 @@ import scala.collection.mutable.Buffer
 import java.io.FileReader
 import com.mongodb._
 import scala.concurrent.duration._
+import com.google.common.cache._
+import scala.collection.mutable._
+
 
 object NewsCollector {
   var mongoClient:MongoClient = _ 
   var db:DB = _
   
-  def fetchRSSLinksF(plugin:RssPlugin) : Future[List[RSSItem]] = future {blocking {
-	RssParser.parse(plugin)
-    //	 (plugin.getItems()).toList
-  }}
+  
+  
+  class linkCacheT extends scala.collection.mutable.HashSet[String] with
+      scala.collection.mutable.SynchronizedSet[String] {
+    var hits = 0
+    var misses = 0
+    
+    def incHits = this.synchronized {
+    	hits += 1
+    }
+    def incMisses = this.synchronized {
+    	misses += 1
+    }
+   }
+  val linkCache:linkCacheT = new linkCacheT
+
+  
+
    def fetchRSSLinks(plugin:RssPlugin) : List[RSSItem] = {
 	RssParser.parse(plugin)
     //	 (plugin.getItems()).toList
@@ -30,33 +47,41 @@ object NewsCollector {
 						.getConstructors()(0).newInstance(path)).asInstanceOf[RssPlugin];
    }
    
-   def constructRSSPluginF(path:String, plugin:String) : Future[RssPlugin] = future {  
-	   (Class.forName(plugin)
-						.getConstructors()(0).newInstance(path)).asInstanceOf[RssPlugin];
-  }
-  def insertStory(i:RSSItem) = {
-    if(db.getCollection("newslinks").find(new BasicDBObject("link", i.Link)).count() == 0) {
-      println("Adding new article: " + i.Title)
-      db.getCollection("newslinks").insert(
+
+  def insertStory(i:RSSItem) : Boolean = {
+	if (linkCache.size > 100000) 
+	  {
+		linkCache.clear
+		println("Clearing Link Cache")
+	  }
+    if(!linkCache.contains(i.Link)) {
+	  linkCache.add(i.Link)
+	  linkCache.incMisses 
+	  if(db.getCollection("newslinks").find(new BasicDBObject("link", i.Link)).count() == 0) {
+			db.getCollection("newslinks").insert(
 								new BasicDBObject("link", i.Link)
 								.append("date", i.Date)
 								.append("title", i.Title)
 								.append("description", i.Description)
 								);
-    }
+			true
+	  } else { 
+	    false
+	  }
+	} else {
+		linkCache.incHits
+		false
+	}
   }
   
-  def insertLinks(list:List[RSSItem]) = {
-    for(l <- list)
-      insertStory(l)
+  def insertLinks(list:List[RSSItem]):Int = {
+   list.map(x=>insertStory(x)).count(_ == true)
   }
   
    
   private def updateFeeds(feedsPath: String): Unit = {
     println("Loading feeeds from" + feedsPath)
-    mongoClient = new MongoClient("localhost")
-    db = mongoClient.getDB("newsdb")
-    //Reading in feeds
+   //Reading in feeds
     val csvReader = new CSVReader(new FileReader(feedsPath))
     var next = true
     while (next) {
@@ -101,32 +126,20 @@ object NewsCollector {
 	    throw new Exception("Must specify --feeds path")
 	  } 
 	  val feedsPath = args(args.indexOf("--feeds") + 1)
-	  updateFeeds(feedsPath)
-	  val feedList = loadFeeds().map(l=> constructRSSPlugin(l._1, l._2)).par
-	  feedList.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(4))
-	  
+
+	mongoClient = new MongoClient("localhost")
+    db = mongoClient.getDB("newsdb")
+    updateFeeds(feedsPath)
+    
+	val feedList = loadFeeds().map(l=> constructRSSPlugin(l._1, l._2)).par
+	feedList.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(16))
+	var loopcounter:Long = 1
 	while(true){
-	  println("Entering update loop for " + feedList.length + " feeds" )
-/*	Futures version 
- *  val pluginFList = feedList.map(l =>  constructRSSPlugin(l._1,l._2))
-	 val linkFList = pluginFList.map(_.flatMap(fetchRSSLinks(_)))
-	 linkFList.map(_ onComplete {
-	 	case Success(p) => insertLinks(p)
-    	case Failure(t) => {println("Failed plugin construction " + t.getMessage() )}
-    	}) 
-      val t = linkFList.map(p => Await.ready(p, 1200 seconds))
-      * */
-	 feedList.map(p => insertLinks(fetchRSSLinks(p)))
-  /*   val pluginList = feedList.map(l =>  constructRSSPlugin(l._1,l._2))
-     println("Constructed plugins")
-     pluginList.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(64))
-     val linkFList = pluginList.map(fetchRSSLinks(_))
-     println("Fetched links")
-     linkFList.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(64))
-	 linkFList.map(insertLinks(_))
-	 println("Inserted Links")
-	 * */
-     Thread.sleep(1000)
+	 println(loopcounter + "  Entering update loop for " + feedList.length + " feeds\nHits:" + linkCache.hits + "\nMisses" + linkCache.misses + "\n" )
+	 val insCount = feedList.map(p => insertLinks(fetchRSSLinks(p))).reduceLeft(_+_)
+	 loopcounter+=1
+	 println("Inserted " + insCount + " stories")
+     Thread.sleep(300000)
 	}
   }
 
