@@ -9,6 +9,7 @@ import org.jsoup._
 import java.net.{URLConnection, URL}
 import scala.io.Source.{fromInputStream}
 
+
 object htmlcleaner {
  def jshtml2text( html:String) : String = {
     return (Jsoup.parse(html).text())
@@ -59,7 +60,7 @@ object RssParser {
 			val xlist = parse(wstring, plugin)
 			return xlist
 		} catch {
-			case e:Throwable=>
+			case e:Throwable=> 
 	      //Remove broken feeds from database?
 		}
 		Nil    

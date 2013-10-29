@@ -13,7 +13,33 @@ import com.mongodb._
 import scala.concurrent.duration._
 import com.google.common.cache._
 import scala.collection.mutable._
+import org.apache.http.client._
+import org.apache.http.client.methods._
+import org.apache.http.impl.client.DefaultHttpClient
+import org.apache.http.impl.client.BasicResponseHandler
+import org.apache.http.entity.StringEntity
+import org.apache.http.entity.ContentType
+import org.joda.time.DateTime
+import org.joda.time._
 
+object CalaisPost {
+
+	val CALAIS_URL = "http://api.opencalais.com/tag/rs/enrich"
+    val CALAIS_KEY = "t7bmcemzr7qc8yy5t4vkd895"
+	
+    def  run(text:String): String = {
+		val httpClient = new DefaultHttpClient
+		val httpPost = new HttpPost(CALAIS_URL)
+		val brh = new BasicResponseHandler
+
+		httpPost.addHeader("x-calais-licenseID", CALAIS_KEY);
+		httpPost.addHeader("Content-Type", "text/raw; charset=UTF-8");
+		httpPost.addHeader("Accept", "xml/rdf");
+		httpPost.setEntity(new StringEntity(text, 
+				           ContentType.create("text/plain", "UTF-8")))
+		httpClient.execute (httpPost, brh);
+	}
+}
 
 object NewsCollector {
   var mongoClient:MongoClient = _ 
@@ -38,7 +64,7 @@ object NewsCollector {
   
 
    def fetchRSSLinks(plugin:RssPlugin) : List[RssItem] = {
-	RssParser.parse(plugin)
+    RssParser.parse(plugin)
     //	 (plugin.getItems()).toList
    }
    
@@ -63,6 +89,7 @@ object NewsCollector {
 								.append("date", i.Date)
 								.append("title", i.Title)
 								.append("description", i.Description)
+								.append("rdf", CalaisPost.run(i.Title + ". " + i.Description))
 								);
 			true
 	  } else { 
@@ -80,7 +107,7 @@ object NewsCollector {
   
    
   private def updateFeeds(feedsPath: String): Unit = {
-    println("Loading feeeds from" + feedsPath)
+    println("Loading feeds from" + feedsPath)
    //Reading in feeds
     val csvReader = new CSVReader(new FileReader(feedsPath))
     var next = true
@@ -130,15 +157,26 @@ object NewsCollector {
 	mongoClient = new MongoClient("localhost")
     db = mongoClient.getDB("newsdb")
     updateFeeds(feedsPath)
-    
+    var dayCount = 0;
+	val dailyLimit = 49000;
+	var dayCountUpdated = DateTime.now
 	val feedList = loadFeeds().map(l=> constructRSSPlugin(l._1, l._2)).par
-	feedList.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(16))
+	feedList.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(1))
 	var loopcounter:Long = 1
 	while(true){
 	 println(loopcounter + "  Entering update loop for " + feedList.length + " feeds\nHits:" + linkCache.hits + "\nMisses" + linkCache.misses + "\n" )
-	 val insCount = feedList.map(p => insertLinks(fetchRSSLinks(p))).reduceLeft(_+_)
-	 loopcounter+=1
-	 println("Inserted " + insCount + " stories")
+	 if (dayCount < dailyLimit) {
+		 val insCount = feedList.map(p => insertLinks(fetchRSSLinks(p))).reduceLeft(_+_);
+		 dayCount += insCount;	
+		 loopcounter+=1;
+		 println("Inserted " + insCount + " stories")
+	 }
+	 
+	 if (dayCountUpdated.plusDays(1).isAfter(DateTime.now))  {
+	   dayCount = 0;
+	   dayCountUpdated = DateTime.now
+	 }
+
      Thread.sleep(300000)
 	}
   }
