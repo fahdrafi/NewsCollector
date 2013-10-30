@@ -49,20 +49,11 @@ object CalaisPost {
  											"EntityName" -> (p \ "name").text
  										  )
 		 						).filter(_("EntityName").size != 0).map(m => new BasicDBObject(m)); 
-	def parseRdfTuple(rdf:scala.xml.Elem) = (rdf \ "Description")
- 								.map(p =>  (
- 								  	(p.attributes.filter(a => a.key == "about").map(_.value.text)).head,
- 									(p \ "type")(0).attributes.value.text,
- 									(p \ "name").text
- 										  )
-		 						).filter(_._3.size != 0); 
 }
 
 object NewsCollector {
   var mongoClient:MongoClient = _ 
   var db:DB = _
-  
-  
   
   class linkCacheT extends scala.collection.mutable.HashSet[String] with
       scala.collection.mutable.SynchronizedSet[String] {
@@ -199,5 +190,4 @@ object NewsCollector {
      Thread.sleep(300000)
 	}
   }
-
 }
