@@ -36,7 +36,6 @@ object RssParser {
 		  titem.Link = plugin.getLink((i \ "link").text)
 		  titem.Title =( i \ "title").text
 		  titem.Description = htmlcleaner.jshtml2text((i \ "description").text)
-		  //htmlcleaner.html2text(titem.Description)
 		  itemList ::= titem
 		}
 		itemList

@@ -21,6 +21,8 @@ import org.apache.http.entity.StringEntity
 import org.apache.http.entity.ContentType
 import org.joda.time.DateTime
 import org.joda.time._
+import scala.xml.{Elem, XML, Node}
+import scala.xml.factory.XMLLoader
 
 object CalaisPost {
 
@@ -39,6 +41,21 @@ object CalaisPost {
 				           ContentType.create("text/plain", "UTF-8")))
 		httpClient.execute (httpPost, brh);
 	}
+
+	def parseRdf(rdf:scala.xml.Elem) = (rdf \ "Description")
+ 								.map(p => Map(
+ 											"EntityID" -> (p.attributes.filter(a => a.key == "about").map(_.value.text)).head,
+ 											"EntityType" -> (p \ "type")(0).attributes.value.text,
+ 											"EntityName" -> (p \ "name").text
+ 										  )
+		 						).filter(_("EntityName").size != 0).map(m => new BasicDBObject(m)); 
+	def parseRdfTuple(rdf:scala.xml.Elem) = (rdf \ "Description")
+ 								.map(p =>  (
+ 								  	(p.attributes.filter(a => a.key == "about").map(_.value.text)).head,
+ 									(p \ "type")(0).attributes.value.text,
+ 									(p \ "name").text
+ 										  )
+		 						).filter(_._3.size != 0); 
 }
 
 object NewsCollector {
@@ -65,7 +82,6 @@ object NewsCollector {
 
    def fetchRSSLinks(plugin:RssPlugin) : List[RssItem] = {
     RssParser.parse(plugin)
-    //	 (plugin.getItems()).toList
    }
    
    def constructRSSPlugin(path:String, plugin:String) : RssPlugin =  {  
@@ -84,12 +100,15 @@ object NewsCollector {
 	  linkCache.add(i.Link)
 	  linkCache.incMisses 
 	  if(db.getCollection("newslinks").find(new BasicDBObject("link", i.Link)).count() == 0) {
+		  val rdf = CalaisPost.run(i.Title + ". " + i.Description)
+		  val entityList = CalaisPost.parseRdf(XML.loadString(rdf))
 			db.getCollection("newslinks").insert(
 								new BasicDBObject("link", i.Link)
 								.append("date", i.Date)
 								.append("title", i.Title)
 								.append("description", i.Description)
-								.append("rdf", CalaisPost.run(i.Title + ". " + i.Description))
+								.append("rdf", rdf)
+								.append("EntityList", entityList.toArray)
 								);
 			true
 	  } else { 
