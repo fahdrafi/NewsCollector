@@ -40,6 +40,7 @@ object CalaisPost {
 		httpPost.setEntity(new StringEntity(text, 
 				           ContentType.create("text/plain", "UTF-8")))
 		httpClient.execute (httpPost, brh);
+
 	}
 
 	def parseRdf(rdf:scala.xml.Elem) = (rdf \ "Description")
@@ -89,31 +90,55 @@ object NewsCollector {
 	  }
     if(!linkCache.contains(i.Link)) {
 	  linkCache.add(i.Link)
-	  linkCache.incMisses 
-	  if(db.getCollection("newslinks").find(new BasicDBObject("link", i.Link)).count() == 0) {
+	  linkCache.incMisses
+	  if(db.getCollection("newslinks").find(new BasicDBObject("Link", i.Link)).count() == 0) {
 		  val rdf = CalaisPost.run(i.Title + ". " + i.Description)
 		  val entityList = CalaisPost.parseRdf(XML.loadString(rdf))
-			db.getCollection("newslinks").insert(
-								new BasicDBObject("link", i.Link)
-								.append("date", i.Date)
-								.append("title", i.Title)
-								.append("description", i.Description)
-								.append("rdf", rdf)
-								.append("EntityList", entityList.toArray)
-								);
-			true
+		  db.getCollection("newslinks").insert(
+				  new BasicDBObject("Link", i.Link)
+				  .append("Date", i.Date)
+				  .append("Title", i.Title)
+				  .append("Description", i.Description)
+				  .append("Rdf", rdf)
+				  .append("EntityList", entityList.toArray)
+				  );
+		  
+
+		  for (e <- entityList) {
+		    val eCollection = db.getCollection("entities")
+		    val foundEntity = eCollection.find(new BasicDBObject("EntityID", e("EntityID"))); 
+		    assert (foundEntity.count() <= 1)
+		    if (foundEntity.count() == 0) {
+		      eCollection.insert (
+		    		  new BasicDBObject(e).append("StoryList", List(i.Link).toArray)
+		      )
+		    } else {		    	
+		    	val sList = (foundEntity.next().get("StoryList").asInstanceOf[org.bson.types.BasicBSONList].toArray())
+		    	assert(!sList.exists((_.toString().equals(i.Link))))
+		    	foundEntity.curr().put("StoryList", sList :+ i.Link)
+		    	eCollection.save(foundEntity.curr())
+		    }
+		  }
+		  true	
 	  } else { 
-	    false
+		  false	
 	  }
 	} else {
 		linkCache.incHits
 		false
 	}
   }
-  
-  def insertLinks(list:List[RssItem]):Int = {
-   list.map(x=>insertStory(x)).count(_ == true)
-  }
+
+   def insertLinks(list:List[RssItem]):Int = {
+		   list.map(
+				   x=>try {
+					   insertStory(x)
+				   } catch {
+				   case e:Throwable =>
+				   false
+				   }
+				   ).count(_ == true)
+   }
   
    
   private def updateFeeds(feedsPath: String): Unit = {
