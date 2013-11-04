@@ -27,7 +27,7 @@ import com.mongodb.casbah.Imports._
 object CalaisPost {
 
   val CALAIS_URL = "http://api.opencalais.com/tag/rs/enrich"
-  val CALAIS_KEY = "t7bmcemzr7qc8yy5t4vkd895"
+  val CALAIS_KEY = "xxxxxx" // add opencalais key here
 
   def run(text: String): String = {
     val httpClient = new DefaultHttpClient
